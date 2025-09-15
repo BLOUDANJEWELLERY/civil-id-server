@@ -78,3 +78,9 @@ async def process_civil_id(front: UploadFile = File(...), back: UploadFile = Fil
         "front": front_processed.hex(),
         "back": back_processed.hex()
     }
+    
+    
+    
+    @app.get("/")
+async def root():
+    return {"message": "Civil ID server is running!"}
