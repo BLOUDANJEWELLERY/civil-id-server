@@ -15,29 +15,37 @@ app.add_middleware(
 )
 
 def auto_crop_and_rotate(image_bytes):
+    # Decode image
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     orig = img.copy()
 
+    # Convert to grayscale and blur
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5,5), 0)
-    edges = cv2.Canny(blur, 75, 200)
 
-    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    # Detect edges
+    edges = cv2.Canny(blur, 50, 150)
+
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Find largest quadrilateral
     max_area = 0
-    approx_curve = None
-
+    best_rect = None
     for cnt in contours:
         peri = cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
         if len(approx) == 4:
-            area = cv2.contourArea(cnt)
+            area = cv2.contourArea(approx)
             if area > max_area:
                 max_area = area
-                approx_curve = approx
+                best_rect = approx
 
-    if approx_curve is not None:
-        pts = approx_curve.reshape(4, 2)
+    if best_rect is not None:
+        pts = best_rect.reshape(4,2)
+
+        # Order points: top-left, top-right, bottom-right, bottom-left
         rect = np.zeros((4,2), dtype="float32")
         s = pts.sum(axis=1)
         rect[0] = pts[np.argmin(s)]
@@ -64,8 +72,18 @@ def auto_crop_and_rotate(image_bytes):
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(orig, M, (maxWidth, maxHeight))
     else:
-        warped = cv2.resize(orig, (1000, 600))
+        # Fallback: use minAreaRect for rough rectangle
+        rect = cv2.minAreaRect(np.array(contours).reshape(-1,2))
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
+        width = int(rect[1][0])
+        height = int(rect[1][1])
+        src_pts = box.astype("float32")
+        dst_pts = np.array([[0,0],[width-1,0],[width-1,height-1],[0,height-1]], dtype="float32")
+        M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        warped = cv2.warpPerspective(orig, M, (width, height))
 
+    # Encode as JPEG
     _, buf = cv2.imencode(".jpg", warped)
     return base64.b64encode(buf).decode("utf-8")  # return as base64 string
 
