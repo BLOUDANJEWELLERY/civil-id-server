@@ -81,6 +81,6 @@ async def process_civil_id(front: UploadFile = File(...), back: UploadFile = Fil
     
     
     
-    @app.get("/")
+@app.get("/")
 async def root():
     return {"message": "Civil ID server is running!"}
