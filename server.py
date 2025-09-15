@@ -2,10 +2,11 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
+import base64
 
 app = FastAPI()
 
-# Allow requests from anywhere (you can restrict later)
+# Allow requests from anywhere (for now)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,21 +67,21 @@ def auto_crop_and_rotate(image_bytes):
         warped = cv2.resize(orig, (1000, 600))
 
     _, buf = cv2.imencode(".jpg", warped)
-    return buf.tobytes()
+    return base64.b64encode(buf).decode("utf-8")  # return as base64 string
 
 @app.post("/process-civil-id")
 async def process_civil_id(front: UploadFile = File(...), back: UploadFile = File(...)):
     front_bytes = await front.read()
     back_bytes = await back.read()
+
     front_processed = auto_crop_and_rotate(front_bytes)
     back_processed = auto_crop_and_rotate(back_bytes)
+
     return {
-        "front": front_processed.hex(),
-        "back": back_processed.hex()
+        "front": front_processed,
+        "back": back_processed
     }
-    
-    
-    
+
 @app.get("/")
 async def root():
     return {"message": "Civil ID server is running!"}
